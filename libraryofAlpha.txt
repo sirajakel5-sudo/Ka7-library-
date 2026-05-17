@@ -1,11 +1,7 @@
 -- ============================================
 -- مكتبة KA7 Library - النسخة النهائية المعدلة
--- إصلاح جميع المشاكل:
--- - زر X يظهر نافذة تأكيد (نعم/إلغاء) مع UIStroke
--- - زر Y يصغر الواجهة بشكل صحيح
--- - خلفية الواجهة والزر العائم: rbxassetid://87950815567502
--- - تبويب "الحجم" يظهر تلقائياً (بدون ديسكورد)
--- - جميع الأخطاء السابقة (MainCorner, Comnection) تم إصلاحها
+-- التعديل الوحيد: إصلاح زر الإغلاق (X) ليظهر نافذة تأكيد (نعم/لا)
+-- كل شيء آخر كما هو (أسطوري)
 -- ============================================
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -54,7 +50,6 @@ local UIScale = ViewportSize.Y / 450
 local Settings = redzlib.Settings
 local Flags = redzlib.Flags
 
--- دوال مساعدة (SetProps, Create, إلخ) - تم تضمينها كاملة
 local SetProps, SetChildren, InsertTheme, Create
 do
     InsertTheme = function(Instance, Type)
@@ -690,10 +685,12 @@ function redzlib:MakeWindow(Configs)
 
     local Window, FirstTab = {}, false
 
-    -- دالة الإغلاق بنافذة تأكيد
+    -- ========== دالة الإغلاق المعدلة (الزر X) ==========
     function Window:CloseBtn()
+        if MainFrame:FindFirstChild("CloseDialogFrame") then return end
+
         local DialogFrame = Create("Frame", MainFrame, {
-            Name = "CustomDialog",
+            Name = "CloseDialogFrame",
             Size = UDim2.fromOffset(220, 100),
             Position = UDim2.new(0.5, -110, 0.5, -50),
             BackgroundColor3 = Theme["Color Hub 2"],
@@ -703,7 +700,7 @@ function redzlib:MakeWindow(Configs)
         })
         Make("Corner", DialogFrame, UDim.new(0, 8))
         Make("Stroke", DialogFrame, Theme["Color Stroke"], 1.5)
-        Make("Gradient", DialogFrame, {Rotation = 45})
+        Make("Gradient", DialogFrame, { Rotation = 45 })
 
         local TitleD = InsertTheme(Create("TextLabel", DialogFrame, {
             Size = UDim2.new(1, -20, 0, 25),
@@ -714,6 +711,7 @@ function redzlib:MakeWindow(Configs)
             TextColor3 = Theme["Color Text"],
             BackgroundTransparency = 1
         }), "Text")
+
         local Msg = InsertTheme(Create("TextLabel", DialogFrame, {
             Size = UDim2.new(1, -20, 0, 30),
             Position = UDim2.new(0, 10, 0, 30),
@@ -746,7 +744,7 @@ function redzlib:MakeWindow(Configs)
         local CancelButton = Create("TextButton", ButtonsHolder, {
             Size = UDim2.new(0.45, 0, 1, 0),
             Position = UDim2.new(0.55, 0, 0, 0),
-            Text = "إلغاء",
+            Text = "لا",
             Font = Enum.Font.GothamBold,
             TextSize = 12,
             BackgroundColor3 = Theme["Color Hub 2"],
@@ -759,17 +757,19 @@ function redzlib:MakeWindow(Configs)
         YesButton.Activated:Connect(function()
             ScreenGui:Destroy()
         end)
+
         CancelButton.Activated:Connect(function()
             DialogFrame:Destroy()
         end)
 
-        local function CloseDialog(Input)
+        local function CloseOnOutsideClick(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 then
                 DialogFrame:Destroy()
             end
         end
-        UserInputService.InputBegan:Connect(CloseDialog)
+        UserInputService.InputBegan:Connect(CloseOnOutsideClick)
     end
+    -- ========== نهاية تعديل زر الإغلاق ==========
 
     function Window:MinimizeBtn()
         if WaitClick then return end
@@ -1019,6 +1019,7 @@ function redzlib:MakeWindow(Configs)
         function Tab:Visible(Bool) Funcs:ToggleVisible(TabSelect, Bool); Funcs:ToggleParent(Container, Bool, Containers) end
         function Tab:Destroy() TabSelect:Destroy(); Container:Destroy() end
 
+        -- دوال الإضافات (Section, Button, Toggle, Dropdown, Slider, TextBox, SizeChanger)
         function Tab:AddSection(Configs)
             local SectionName = type(Configs) == "string" and Configs or Configs[1] or Configs.Name or Configs.Title or Configs.Section
             local SectionFrame = Create("Frame", Container, {Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Name = "Option"})
@@ -1389,6 +1390,253 @@ function redzlib:MakeWindow(Configs)
                 CallbackSelected()
                 UpdateSelected()
             end
+            Button.Activated:Connect(Minimize)
+            NoClickFrame.MouseButton1Down:Connect(Disable)
+            NoClickFrame.MouseButton1Click:Connect(Disable)
+            MainFrame:GetPropertyChangedSignal("Visible"):Connect(Disable)
+            SelectedFrame:GetPropertyChangedSignal("AbsolutePosition"):Connect(CalculatePos)
+            Button.Activated:Connect(CalculateSize)
+            ScrollFrame.ChildAdded:Connect(CalculateSize)
+            ScrollFrame.ChildRemoved:Connect(CalculateSize)
+            CalculatePos()
+            CalculateSize()
+            local Dropdown = {}
+            function Dropdown:Visible(...) Funcs:ToggleVisible(Button, ...) end
+            function Dropdown:Destroy() Button:Destroy() end
+            function Dropdown:Callback(...) Funcs:InsertCallback(Callback, ...)(Selected) end
+            function Dropdown:Add(...)
+                local NewOptions = {...}
+                if type(NewOptions[1]) == "table" then
+                    for _, Name in pairs(NewOptions[1]) do AddOption(Name, Name) end
+                else
+                    for _, Name in pairs(NewOptions) do AddOption(Name, Name) end
+                end
+            end
+            function Dropdown:Remove(Option)
+                for index, Value in pairs(GetOptions()) do
+                    if type(Option) == "number" and index == Option or Value.Name == Option then
+                        RemoveOption(index, Value.Value)
+                    end
+                end
+            end
+            function Dropdown:Select(Option)
+                if type(Option) == "string" then
+                    for _, Val in pairs(Options) do if Val.Name == Option then Select(Val) end end
+                elseif type(Option) == "number" then
+                    for ind, Val in pairs(Options) do if ind == Option then Select(Val) end end
+                end
+            end
+            function Dropdown:Set(Val1, Clear)
+                if type(Val1) == "table" then AddNewOptions(Val1, not Clear)
+                elseif type(Val1) == "function" then Callback = Val1 end
+            end
+            return Dropdown
+        end
+
+        function Tab:AddSlider(Configs)
+            local SName = Configs[1] or Configs.Name or Configs.Title or "Slider!"
+            local SDesc = Configs.Desc or Configs.Description or ""
+            local Min = Configs[2] or Configs.MinValue or Configs.Min or 10
+            local Max = Configs[3] or Configs.MaxValue or Configs.Max or 100
+            local Increase = Configs[4] or Configs.Increase or 1
+            local Callback = Funcs:GetCallback(Configs, 6)
+            local Flag = Configs[7] or Configs.Flag or false
+            local Default = Configs[5] or Configs.Default or 25
+            if CheckFlag(Flag) then Default = GetFlag(Flag) end
+            local MinVal, MaxVal = Min / Increase, Max / Increase
+            local Button, LabelFunc = ButtonFrame(Container, SName, SDesc, UDim2.new(1, -180))
+            local SliderHolder = Create("TextButton", Button, {
+                Size = UDim2.new(0.45, 0, 1),
+                Position = UDim2.new(1),
+                AnchorPoint = Vector2.new(1, 0),
+                AutoButtonColor = false,
+                Text = "",
+                BackgroundTransparency = 1
+            })
+            local SliderBar = InsertTheme(Create("Frame", SliderHolder, {
+                BackgroundColor3 = Theme["Color Stroke"],
+                Size = UDim2.new(1, -20, 0, 6),
+                Position = UDim2.new(0.5, 0, 0.5),
+                AnchorPoint = Vector2.new(0.5, 0.5)
+            }), "Stroke")
+            Make("Corner", SliderBar)
+            local Indicator = InsertTheme(Create("Frame", SliderBar, {
+                BackgroundColor3 = Theme["Color Theme"],
+                Size = UDim2.fromScale(0.3, 1),
+                BorderSizePixel = 0
+            }), "Theme")
+            Make("Corner", Indicator)
+            local SliderIcon = Create("Frame", SliderBar, {
+                Size = UDim2.new(0, 6, 0, 12),
+                BackgroundColor3 = Color3.fromRGB(220, 220, 220),
+                Position = UDim2.fromScale(0.3, 0.5),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 0.2
+            })
+            Make("Corner", SliderIcon)
+            local LabelVal = InsertTheme(Create("TextLabel", SliderHolder, {
+                Size = UDim2.new(0, 14, 0, 14),
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(0, 0, 0.5),
+                BackgroundTransparency = 1,
+                TextColor3 = Theme["Color Text"],
+                Font = Enum.Font.FredokaOne,
+                TextSize = 12
+            }), "Text")
+            local UIScale2 = Create("UIScale", LabelVal)
+            local BaseMousePos = Create("Frame", SliderBar, {Position = UDim2.new(0, 0, 0.5, 0), Visible = false})
+            local function UpdateLabel(NewValue)
+                local Number = tonumber(NewValue * Increase)
+                Number = math.floor(Number * 100) / 100
+                Default, LabelVal.Text = Number, tostring(Number)
+                Funcs:FireCallback(Callback, Default)
+            end
+            local function ControlPos()
+                local MousePos = Player:GetMouse()
+                local APos = MousePos.X - BaseMousePos.AbsolutePosition.X
+                local ConfigureDpiPos = APos / SliderBar.AbsoluteSize.X
+                SliderIcon.Position = UDim2.new(math.clamp(ConfigureDpiPos, 0, 1), 0, 0.5, 0)
+            end
+            local function UpdateValues()
+                Indicator.Size = UDim2.new(SliderIcon.Position.X.Scale, 0, 1, 0)
+                local SliderPos = SliderIcon.Position.X.Scale
+                local NewValue = math.floor(((SliderPos * MaxVal) / MaxVal) * (MaxVal - MinVal) + MinVal)
+                UpdateLabel(NewValue)
+            end
+            SliderHolder.MouseButton1Down:Connect(function()
+                CreateTween({SliderIcon, "Transparency", 0, 0.3})
+                Container.ScrollingEnabled = false
+                while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                    task.wait()
+                    ControlPos()
+                end
+                CreateTween({SliderIcon, "Transparency", 0.2, 0.3})
+                Container.ScrollingEnabled = true
+                SetFlag(Flag, Default)
+            end)
+            LabelVal:GetPropertyChangedSignal("Text"):Connect(function()
+                UIScale2.Scale = 0.3
+                CreateTween({UIScale2, "Scale", 1.2, 0.1})
+                CreateTween({LabelVal, "Rotation", math.random(-1, 1) * 5, 0.15, true})
+                CreateTween({UIScale2, "Scale", 1, 0.2})
+                CreateTween({LabelVal, "Rotation", 0, 0.1})
+            end)
+            local function SetSlider(NewValue)
+                if type(NewValue) ~= "number" then return end
+                local Min2, Max2 = MinVal * Increase, MaxVal * Increase
+                local SliderPos = (NewValue - Min2) / (Max2 - Min2)
+                SetFlag(Flag, NewValue)
+                CreateTween({SliderIcon, "Position", UDim2.fromScale(math.clamp(SliderPos, 0, 1), 0.5), 0.3, true})
+            end
+            SetSlider(Default)
+            SliderIcon:GetPropertyChangedSignal("Position"):Connect(UpdateValues)
+            UpdateValues()
+            local Slider = {}
+            function Slider:Set(NewVal1, NewVal2)
+                if NewVal1 and NewVal2 then
+                    LabelFunc:SetTitle(NewVal1)
+                    LabelFunc:SetDesc(NewVal2)
+                elseif type(NewVal1) == "string" then
+                    LabelFunc:SetTitle(NewVal1)
+                elseif type(NewVal1) == "function" then
+                    Callback = NewVal1
+                elseif type(NewVal1) == "number" then
+                    SetSlider(NewVal1)
+                end
+            end
+            function Slider:Callback(...) Funcs:InsertCallback(Callback, ...)(tonumber(Default)) end
+            function Slider:Visible(...) Funcs:ToggleVisible(Button, ...) end
+            function Slider:Destroy() Button:Destroy() end
+            return Slider
+        end
+
+        function Tab:AddTextBox(Configs)
+            local TName = Configs[1] or Configs.Name or Configs.Title or "Text Box"
+            local TDesc = Configs.Desc or Configs.Description or ""
+            local TDefault = Configs[2] or Configs.Default or ""
+            local TPlaceholderText = Configs[5] or Configs.PlaceholderText or "Input"
+            local TClearText = Configs[3] or Configs.ClearText or false
+            local Callback = Funcs:GetCallback(Configs, 4)
+            if type(TDefault) ~= "string" or TDefault:gsub(" ", ""):len() < 1 then TDefault = false end
+            local Button, LabelFunc = ButtonFrame(Container, TName, TDesc, UDim2.new(1, -38))
+            local SelectedFrame = InsertTheme(Create("Frame", Button, {
+                Size = UDim2.new(0, 150, 0, 18),
+                Position = UDim2.new(1, -10, 0.5),
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundColor3 = Theme["Color Stroke"]
+            }), "Stroke")
+            Make("Corner", SelectedFrame, UDim.new(0, 4))
+            local TextBoxInput = InsertTheme(Create("TextBox", SelectedFrame, {
+                Size = UDim2.new(0.85, 0, 0.85, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamBold,
+                TextScaled = true,
+                TextColor3 = Theme["Color Text"],
+                ClearTextOnFocus = TClearText,
+                PlaceholderText = TPlaceholderText,
+                Text = ""
+            }), "Text")
+            local Pencil = Create("ImageLabel", SelectedFrame, {
+                Size = UDim2.new(0, 12, 0, 12),
+                Position = UDim2.new(0, -5, 0.5),
+                AnchorPoint = Vector2.new(1, 0.5),
+                Image = "rbxassetid://15637081879",
+                BackgroundTransparency = 1
+            })
+            local TextBox = {}
+            local function Input()
+                local Text = TextBoxInput.Text
+                if Text:gsub(" ", ""):len() > 0 then
+                    if TextBox.OnChanging then Text = TextBox.OnChanging(Text) or Text end
+                    Funcs:FireCallback(Callback, Text)
+                    TextBoxInput.Text = Text
+                end
+            end
+            TextBoxInput.FocusLost:Connect(Input)
+            Input()
+            TextBoxInput.FocusLost:Connect(function() CreateTween({Pencil, "ImageColor3", Color3.fromRGB(255, 255, 255), 0.2}) end)
+            TextBoxInput.Focused:Connect(function() CreateTween({Pencil, "ImageColor3", Theme["Color Theme"], 0.2}) end)
+            TextBox.OnChanging = false
+            function TextBox:Visible(...) Funcs:ToggleVisible(Button, ...) end
+            function TextBox:Destroy() Button:Destroy() end
+            return TextBox
+        end
+
+        function Tab:AddSizeChanger()
+            return Tab:AddDropdown({
+                Name = "حجم الواجهة",
+                Desc = "اختر مقياس الحجم المناسب",
+                Options = {"صغير جداً (0.5x)", "صغير (0.7x)", "عادي (1x)", "كبير (1.3x)", "كبير جداً (1.6x)"},
+                Default = "عادي (1x)",
+                Callback = function(Value)
+                    local scale = 1
+                    if Value == "صغير جداً (0.5x)" then scale = 0.5
+                    elseif Value == "صغير (0.7x)" then scale = 0.7
+                    elseif Value == "عادي (1x)" then scale = 1
+                    elseif Value == "كبير (1.3x)" then scale = 1.3
+                    elseif Value == "كبير جداً (1.6x)" then scale = 1.6
+                    end
+                    local currentScale = ScreenGui:FindFirstChild("Scale")
+                    if currentScale then currentScale.Scale = scale end
+                end
+            })
+        end
+
+        return Tab
+    end
+
+    -- إضافة تبويب الحجم تلقائياً (بدون ديسكورد)
+    local SizeTab = Window:MakeTab({"الحجم", "settings"})
+    SizeTab:AddSizeChanger()
+
+    CloseButton.Activated:Connect(Window.CloseBtn)
+    MinimizeButton.Activated:Connect(Window.MinimizeBtn)
+    return Window
+end
+
+return redzlib            end
             Button.Activated:Connect(Minimize)
             NoClickFrame.MouseButton1Down:Connect(Disable)
             NoClickFrame.MouseButton1Click:Connect(Disable)
